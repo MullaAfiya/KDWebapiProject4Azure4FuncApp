@@ -3,27 +3,40 @@ trigger:
 
 pool:
   name: Default
-
 variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
   buildConfiguration: 'Release'
+  dotnetSdkVersion: '3.1.x'  # Adjust to the latest 3.1.x version
 
 steps:
-- task: NuGetToolInstaller@1
-
-- task: NuGetCommand@2
+- task: UseDotNet@2
   inputs:
-    command: 'clear'  # Clear NuGet cache
-    restoreSolution: '$(solution)'
+    packageType: 'sdk'
+    version: '$(dotnetSdkVersion)'
+    installationPath: $(Agent.ToolsDirectory)/dotnet  # Install .NET Core SDK
 
-- task: VSBuild@1
-  inputs:
-    solution: '$(solution)'
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+- script: dotnet restore --configfile nuget.config  # Restore NuGet packages
+  displayName: 'Restore NuGet Packages'
 
-- task: VSTest@2
+- script: dotnet build --configuration $(buildConfiguration)  # Build the project
+  displayName: 'Build Solution'
+
+- task: DotNetCoreCLI@2
   inputs:
-    platform: '$(buildPlatform)'
-    configuration: '$(buildConfiguration)'
+    command: 'test'
+    projects: '**/*.Tests.csproj'  # Specify test projects if applicable
+    arguments: '--configuration $(buildConfiguration)'  # Test with the same configuration used for build
+
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'publish'
+    publishWebProjects: true
+    arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'  # Publish the web API project
+    zipAfterPublish: true
+    modifyOutputPath: false
+    displayName: 'Publish Web API'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathtoPublish: '$(Build.ArtifactStagingDirectory)'  # Publish artifacts (zip file) created during publish step
+    artifactName: 'web-api-artifact'
+    publishLocation: 'Container'
